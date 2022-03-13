@@ -1,0 +1,105 @@
+---
+title: "Group_17_Analysis"
+author: "Weirong Bai"
+date: "13/03/2022"
+output: 
+  pdf_document:
+    latex_engine: pdflatex
+    number_sections: no
+  html_document:
+    df_print: paged
+fig_caption: yes
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, eval = TRUE, warning = FALSE, message = FALSE, comment = NA)
+```
+
+``` {r libraries}
+library(tidyverse)
+library(dplyr)
+library(ggplot2)
+library(broom)
+library(robotstxt)
+library(rvest)
+library(stringr)
+library(moderndive)
+library(gridExtra)
+library(kableExtra)
+library(skimr)
+library(gapminder)
+library(sjPlot)
+library(stats)
+library(jtools)
+```
+
+``` {r read data, echo=FALSE, eval=TRUE}
+wine <- read.csv('/Users/admin/Documents/Term 2 Courses/Data Analysis Skills/Group Project 2/dataset17.csv')
+```
+
+```{r}
+ggplot(data=wine, aes(x=points, y=price)) +
+  geom_point()
+# change the NA to the mean of the price with the same points
+for(i in 1:length(wine$price)){
+  if(is.na(wine$price[i])) {
+    wine_i <- wine %>% filter(points==points[i])
+    wine$price[i] <- mean(wine_i$price, na.rm=TRUE)
+  }
+}
+```
+
+```{r}
+wine_class_price <- wine %>%
+  mutate(wine_class=as.character(points>90)) %>%
+  select(wine_class, price)
+for (i in 1:length(wine_class_price[,1])) {
+  if (wine_class_price$wine_class[i]==TRUE) {
+    wine_class_price$wine_class[i] <- 'Perfect'
+  }
+  else {
+    wine_class_price$wine_class[i] <- 'Normal'
+  }
+}
+wine_class_price$wine_class <- as.factor(wine_class_price$wine_class)
+levels(wine_class_price$wine_class)
+
+ggplot(data = wine_class_price, aes(x=wine_class, y=price, fill=wine_class)) +
+  geom_boxplot() +
+  labs(x='wine_class', y='price') +
+  theme(legend.position = 'none')
+model <- glm(wine_class ~ price, data=wine_class_price,
+             family = binomial(link = 'logit'))
+summ(model)
+mod1coefs <- round(coef(model), 2)
+```
+
+$$\ln\left(\frac{p}{1-p}\right)= \alpha+\beta \cdot \textrm{price} = `r mod1coefs[1]` + `r mod1coefs[2]`\cdot\textrm{price}$$
+
+```{r}
+wine_class_price <- wine_class_price %>%
+  mutate(logsodds.perfect = predict(model),
+         odds.perfect = exp(logsodds.perfect),
+         probs.perfect = fitted(model),
+         predicted.class = (probs.perfect>=0.5))
+for (i in 1:length(wine_class_price[,1])) {
+  if (wine_class_price$predicted.class[i]==TRUE) {
+    wine_class_price$predicted.class[i] <- 'Perfect'
+  }
+  else {
+    wine_class_price$predicted.class[i] <- 'Normal'
+  }
+}
+accuracy <- sum(wine_class_price$wine_class==wine_class_price$predicted.class)/length(wine_class_price[,1])
+ggplot(data=wine_class_price, aes(x=price, y=probs.perfect)) +
+  geom_smooth(method='glm',
+              method.args=list(family='binomial'),
+              se=FALSE) +
+  labs(x='Price', y='Probability of Wine Being Perfect')
+plot_model(model, type='pred', title='',
+           axis.title = c('Price','Probability of Wine Being Perfect'))
+  
+```
+
