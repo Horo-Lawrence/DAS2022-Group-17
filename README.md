@@ -12,5 +12,5 @@ are only posted for ratings 80 and above)
 - **price** – The cost for a bottle of wine
 - **province** – The province or state the wine is from
 - title – The title of the wine review
-- variety – The type of grape
-- winery – The winery that made the wine
+- **variety** – The type of grape
+- **winery** – The winery that made the wine
