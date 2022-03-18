@@ -1,0 +1,25 @@
+
+```{r cleandata}
+# remove one row with too few information
+wine %>%
+  filter(!is.na(country))
+# change the NA to the mean of the price with the same points
+for(i in 1:length(wine$price)){
+  if(is.na(wine$price[i])) {
+    wine_i <- wine %>% filter(points==points[i])
+    wine$price[i] <- mean(wine_i$price, na.rm=TRUE)
+  }
+}
+# add one column called 'class'
+# Meaning: when points>90, the class of wine would be splendid; otherwise normal
+wine <- wine %>%
+  mutate(class=as.character(points>90))
+for (i in 1:length(wine[,1])) {
+  if (wine$class[i]==TRUE) {
+    wine$class[i] <- 'Splendid'
+  }
+  else {
+    wine$class[i] <- 'Normal'
+  }
+}
+```
