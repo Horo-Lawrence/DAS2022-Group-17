@@ -13,4 +13,10 @@ are only posted for ratings 80 and above)
 - **province** – The province or state the wine is from
 - title – The title of the wine review
 - **variety** – The type of grape
-- **winery** – The winery that made the wine
+- winery – The winery that made the wine
+
+We add one column called 'class'
+
+- **class** - The class of wine points: when points>90, the class will be 'Splendid';otherwise it will be 'Normal'
+
+### Clean Data
