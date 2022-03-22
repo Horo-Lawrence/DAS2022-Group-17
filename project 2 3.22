@@ -1,0 +1,457 @@
+---
+title: "Group_17_Analysis"
+author: "Weirong Bai"
+date: "13/03/2022"
+output: 
+  pdf_document:
+    latex_engine: pdflatex
+    number_sections: no
+  html_document:
+    df_print: paged
+fig_caption: yes
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, eval = TRUE, warning = FALSE, message = FALSE, comment = NA)
+```
+
+``` {r libraries}
+library(tidyverse)
+library(dplyr)
+library(ggplot2)
+library(broom)
+library(robotstxt)
+library(rvest)
+library(stringr)
+library(moderndive)
+library(gridExtra)
+library(kableExtra)
+library(skimr)
+library(gapminder)
+library(sjPlot)
+library(stats)
+library(jtools)
+library(janitor)
+```
+
+``` {r read data, echo=FALSE, eval=TRUE}
+#wine <- read.csv('/Users/admin/Documents/Term 2 Courses/Data Analysis Skills/Group Project 2/dataset17.csv')
+# setwd("/Users/q/Library/Containers/com.tencent.xinWeChat/Data/Library/Application Support/com.tencent.xinWeChat/2.0b4.0.9/26da2bf949bc61ecd8c854d97b76da04/Message/MessageTemp/234be380d4776d30f43bbb535b558b94/File/Group_17_Analysis_1")
+#wine <- read.csv('/Users/admin/Documents/Term 2 Courses/Data Analysis Skills/Group Project 2/dataset17.csv')
+setwd("/Users/q/Documents/Glasgow/Data Analysis Skills/小组作业2")
+wine <- read.csv('dataset17.csv')
+```
+
+```{r preparations}
+# remove one row with too few information 
+# We think it has no value for this research, because this data does not have 'country' 'price' 'province'. 
+wine <- wine %>%
+  filter(!is.na(country))
+# In terms of price, we change the NA to the median of the price with the same points.
+for(i in 1:length(wine$price)){
+  if(is.na(wine$price[i])) {
+    wine_i <- wine %>% filter(points==points[i])
+    wine$price[i] <- median(wine_i$price, na.rm=TRUE)
+  }
+}
+# add one column called 'class'
+# Meaning: when points>90, the class of wine would be splendid; otherwise normal
+wine <- wine %>%
+  mutate(class=as.character(points>90))
+for (i in 1:length(wine[,1])) {
+  if (wine$class[i]==TRUE) {
+    wine$class[i] <- 'Splendid'
+  }
+  else {
+    wine$class[i] <- 'Normal'
+  }
+}
+
+```
+
+# Research Question 
+
+The purpose of this research is to examine which properties of wine influence whether the number of points awarded is greater than 90?
+
+## 1 Introduction {#sec:Intro_1}
+
+Our data contains ratings on a variety of wines and several characteristics about them, which are country, price, province, title, variety, winery. From the data, the titles of different wines vary, which is not very significant for this study, so we study the effects of the remaining variables on the ratings.
+
+## 2 Exploratory Data Analysis
+In the data pre-processing process, we add one column named 'class'. When points>90, the class of wine would be splendid; otherwise normal. We shall consider class of points as our response variable, and hence shall have a binary response variable (splendid/normal).
+
+First, let's look at a boxplot of price by class.
+```{r class_price_boxplot, eval = TRUE, out.width='100%', fig.height = 3, fig.width = 3, fig.align = "center", fig.cap = "\\label{fig:boxplot} Box Plot of Prices for Wine Classes", fig.pos = "H"}
+# boxplot of price for two wine classes
+ggplot(data = wine, aes(x=class, y=price, fill=class)) +
+  geom_boxplot() +
+  labs(x='class', y='price') +
+  theme(legend.position = 'none')
+```
+
+
+Here we can see that the price of splendid tend to be higher than that of normal.
+
+From the box plot, it can be found that the wines with prices over 200 are definitely 'Splendid'. Thus we decided to remove some outliers with prices over 200. 
+
+```{r class_price_boxplot2, eval = TRUE, out.width='100%', fig.height = 4, fig.width = 4, fig.align = "center", fig.cap = "\\label{fig:boxplot2} Box Plot of Prices for Wine Classes After Removing Prices over 200", fig.pos = "H"}
+wine_price_low <- wine %>%
+  filter(price <= 200)
+ggplot(data = wine_price_low, aes(x=class, y=price, fill=class)) +
+  geom_boxplot() +
+  labs(x='class', y='price') +
+  theme(legend.position = 'none')
+```
+
+Then we decided to study the relationship between the class and the country. So first of all, we will make a table to show whether there is a difference among countries.
+
+```{r country_differences_table}
+country_table <- wine %>%
+  tabyl(country, class) %>%
+  adorn_percentages() %>%
+  adorn_pct_formatting() %>%
+  adorn_ns() 
+country_table %>%
+  arrange(desc(Splendid)) %>%
+  kable(caption='\\label{tab:country_differences} The differences of points among different countries') %>%
+  kable_styling(latex_options='HOLD_position')
+```
+
+Then we draw a bar plot to show the differences of different classes in every countries
+```{r class_country_barchart, eval = TRUE, out.width='100%', fig.height = 7, fig.width = 15, fig.align = "center", fig.cap = "\\label{fig:barchart_1} Bar Plot of Country for Wine Classes", fig.pos = "H"}
+wine %>% 
+  filter(country != 'US' & country != 'Italy' & country != 'France') %>%
+  ggplot(aes(x=country, y=..count.., fill=class, group=class))+
+  geom_bar() + 
+  geom_text(stat = 'count', aes(label=..count..), position = position_stack(0.9), check_overlap = TRUE) +
+  labs(x = 'Country', y = 'Number of wines', title = 'Proportions of wines with over 90 points by country') +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+  scale_fill_discrete(name = 'Class')
+
+ggplot(data=wine, aes(x=country, y=..count.., fill=class, group=class))+
+  geom_bar() + 
+  geom_text(stat = 'count', aes(label=..count..), position = position_stack(0.9), check_overlap = TRUE) +
+  labs(x = 'Country', y = 'Number of wines', title = 'Proportions of wines with over 90 points by country') +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+  scale_fill_discrete(name = 'Class')
+```
+
+Secondly, we study the relationship between the class and the variety, and there is the table to show whether there is a difference among varieties.
+```{r variety_differences_table}
+wine$variety <- as.factor(wine$variety)
+variety_table <- wine %>%
+  tabyl(variety, class) %>%
+  adorn_percentages() %>%
+  adorn_pct_formatting() %>%
+  adorn_ns(position='front') %>%
+  arrange(desc(Splendid))
+variety_table[1:15,] %>%
+  kable(caption='\\label{tab:variety_differences} The differences of points among different variety') %>%
+  kable_styling(latex_options='HOLD_position')
+```
+
+Next, there is the bar plot show the differences of different classes in every top 15 variety intuitively.
+```{r class_variety_barchart, eval = TRUE, out.width='100%', fig.height = 9, fig.width = 15, fig.align = "center", fig.cap = "\\label{fig:barchart_2} Bar Plot of Top 15 Varieties for Wine Classes", fig.pos = "H"}
+# transform the 'Splendid'&'Normal' to 1&0 for convenience
+for (i in 1:length(wine[,1])) {
+  if (wine$class[i]=='Splendid') {
+    wine$class[i] <- 1
+  }
+  else {
+    wine$class[i] <- 0
+  }
+}
+# group by Variety
+variety_summary <- wine %>%
+  group_by(variety) %>%
+  summarize(Num_of_splendid = sum(as.integer(class)), 
+            Num_of_normal = n()-sum(as.integer(class)),
+            Prob_of_being_splendid=Num_of_splendid/(Num_of_splendid+Num_of_normal)) %>%
+  arrange(desc(Num_of_splendid))
+# variety_summary$variety[11] <- 'Rh<f4>ne-style Red Blend'
+# transform back
+for (i in 1:length(wine[,1])) {
+  if (wine$class[i]==1) {
+    wine$class[i] <- 'Splendid'
+  }
+  else {
+    wine$class[i] <- 'Normal'
+  }
+}
+# choose the most 15 'Variety' to visualize the plot 
+wine_variety_top15 <- wine %>%
+  filter(variety==variety_summary$variety[1] | variety==variety_summary$variety[2] |
+           variety==variety_summary$variety[3] | variety==variety_summary$variety[4] |
+           variety==variety_summary$variety[5] | variety==variety_summary$variety[6] |
+           variety==variety_summary$variety[7] | variety==variety_summary$variety[8] |
+           variety==variety_summary$variety[9] | variety==variety_summary$variety[10] |
+           variety==variety_summary$variety[11] | variety==variety_summary$variety[12] |
+           variety==variety_summary$variety[13] | variety==variety_summary$variety[14] |
+           variety==variety_summary$variety[15])
+# use a for loop to change one character which cannot display correctly
+for(i in 1:length(wine_variety_top15[,1])){
+  if(wine_variety_top15$variety[i]=='Rh\xf4ne-style Red Blend'){
+    i
+    wine_variety_top15$variety[i] <- 'Rh<f4>ne-style Red Blend'
+  }
+}
+# create the bar chart
+variety_barchart <- wine_variety_top15 %>%
+  ggplot(aes(x=variety, y=..count.., fill=class, group=class))+
+  geom_bar() + 
+  geom_text(stat = 'count', aes(label=..count..), position = position_stack(0.9), check_overlap = TRUE) +
+  labs(x = 'Variety', y = 'Number of wines', title = 'Proportions of wines with over 90 points made by top 15 varieties') +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+  scale_fill_discrete(name = 'Class')
+variety_barchart
+```
+
+Thirdly, we study the relationship between the class and the province, and there is the table to show whether there is a difference among provinces.
+```{r province_differences_table}
+wine$province <- as.factor(wine$province)
+province_table <- wine %>%
+  tabyl(province, class) %>%
+  adorn_percentages() %>%
+  adorn_pct_formatting() %>%
+  adorn_ns(position='front') %>%
+  arrange(desc(Splendid))
+province_table[1:15,] %>%
+  kable(caption='\\label{tab:province_differences} The differences of points among different provinces') %>%
+  kable_styling(latex_options='HOLD_position')
+```
+
+Then, we draw a bar plot to show the differences of different classes in every top 15 province.
+```{r class_province_barchart, eval = TRUE, out.width='100%', fig.height = 9, fig.width = 15, fig.align = "center", fig.cap = "\\label{fig:barchart_3} Bar Plot of Top 15 Provinces for Wine Classes", fig.pos = "H"}
+province_table_prop <- wine %>%
+  tabyl(province, class) %>%
+  adorn_totals() %>%
+  mutate(Prop=round(Splendid/(Splendid+Normal),2)) %>%
+  arrange(desc(Splendid))
+wine_province_top15 <- wine %>%
+  filter(province==province_table_prop$province[17] | province==province_table_prop$province[3] |
+          province==province_table_prop$province[4] | province==province_table_prop$province[5] | 
+           province==province_table_prop$province[6] | province==province_table_prop$province[7] | 
+           province==province_table_prop$province[8] | province==province_table_prop$province[9] | 
+           province==province_table_prop$province[10] | province==province_table_prop$province[11] | 
+           province==province_table_prop$province[12] | province==province_table_prop$province[13] | 
+           province==province_table_prop$province[14] | province==province_table_prop$province[15] | 
+           province==province_table_prop$province[16])
+province_barchart <- wine_province_top15 %>%
+  ggplot(aes(x=province, y=..count.., fill=class, group=class))+
+  geom_bar() + 
+  geom_text(stat = 'count', aes(label=..count..), position = position_stack(0.9), check_overlap = TRUE) +
+  labs(x = 'province', y = 'Number of wines', title = 'Proportions of wines with over 90 points made by top 15 provinces') +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+  scale_fill_discrete(name = 'Class')
+province_barchart
+```
+
+Finally, we make the table to show whether there is a difference among wineries, and want to study the relationship between the class and the winey.
+```{r winery_differences_table}
+wine$winery <- as.factor(wine$winery)
+winery_table <- wine %>%
+  tabyl(winery, class) %>%
+  adorn_percentages() %>%
+  adorn_pct_formatting() %>%
+  adorn_ns(position='front') %>%
+  arrange(desc(Splendid))
+winery_table[1:15,] %>%
+  kable(caption='\\label{tab:province_differences} The differences of points among different winery') %>%
+  kable_styling(latex_options='HOLD_position')
+```
+
+Next, we draw a bar plot to show the differences of different classes in every top 15 winey.
+```{r class_winery_barchart, eval = TRUE, out.width='100%', fig.height = 9, fig.width = 15, fig.align = "center", fig.cap = "\\label{fig:barchart_4} Bar Plot of Top 15 Winery for Wine Classes", fig.pos = "H"}
+winery_table_prop <- wine %>%
+  tabyl(winery, class) %>%
+  adorn_totals() %>%
+  mutate(Prop=round(Splendid/(Splendid+Normal),2)) %>%
+  arrange(desc(Splendid))
+wine_winery_top15 <- wine %>%
+  filter(winery==winery_table_prop$winery[17] | winery==winery_table_prop$winery[3] |
+          winery==winery_table_prop$winery[4] | winery==winery_table_prop$winery[5] | 
+           winery==winery_table_prop$winery[6] | winery==winery_table_prop$winery[7] | 
+           winery==winery_table_prop$winery[8] | winery==winery_table_prop$winery[9] | 
+           winery==winery_table_prop$winery[10] | winery==winery_table_prop$winery[11] | 
+           winery==winery_table_prop$winery[12] | winery==winery_table_prop$winery[13] | 
+           winery==winery_table_prop$winery[14] | winery==winery_table_prop$winery[15] | 
+           winery==winery_table_prop$winery[16])
+winery_barchart <- wine_winery_top15 %>%
+  ggplot(aes(x=winery, y=..count.., fill=class, group=class))+
+  geom_bar() + 
+  geom_text(stat = 'count', aes(label=..count..), position = position_stack(0.9), check_overlap = TRUE) +
+  labs(x = 'winey', y = 'Number of wines', title = 'Proportions of wines with over 90 points made by top 15 winery') +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+  scale_fill_discrete(name = 'Class')
+winery_barchart
+```
+## 3 Formal Data Analysis {#sec:FDA_1}
+
+### Price
+First of all, we examine the relationship between wine price and points. In the data pre-processing process, we add one column named 'class'. When points>90, the class of wine would be splendid; otherwise normal. We shall consider class of points as our response variable, and hence shall have a binary response variable (splendid/normal).
+
+Now, let's fit a logistic regression model to see whether price is a significant properties influence the number of points awarded is greater than 90.
+
+```{r create_mod1}
+# create one GLM model between wine class and price
+model_class_price <- glm(as.factor(class)~price, data=wine, family = binomial(link = 'logit'))
+summ(model_class_price)$coeftable %>%
+  kable(caption = '\\label{tab:mod1coef} The Coefficient Table for Model between Prices and Classes') %>%
+  kable_styling(latex_options = "HOLD_position") 
+mod1coefs <- round(coef(model_class_price),2)
+summary(model_class_price)
+```
+
+The formula of model between class and price
+
+$$\ln\left(\frac{p}{1-p}\right)= \alpha+\beta \cdot \textrm{price} = `r mod1coefs[1]` + `r mod1coefs[2]`\cdot\textrm{price}$$
+$\alpha$ is the intercept of the formula;
+
+$\beta$ is the slope of the formula;
+
+In the formula, where p=Prob(splendid) and 1-p=Prob(normal). Hence, the log-odds of the wine being splendid increase by xxx for every one unit increase in price.
+
+```{r mod1data}
+prob_class_price <- wine %>%
+  select(class, price) %>%
+  mutate(logodds.perfect = round(predict(model_class_price),6),
+         odds.perfect = round(exp(logodds.perfect), 3),
+         probs.perfect = round(fitted(model_class_price),6),
+         predicted.class = (probs.perfect>=0.5))
+for (i in 1:length(prob_class_price[,1])) {
+  if (prob_class_price$predicted.class[i]==TRUE) {
+    prob_class_price$predicted.class[i] <- 'Splendid'
+  }
+  else {
+    prob_class_price$predicted.class[i] <- 'Normal'
+  }
+}
+# Accuracy of prediction by GLM
+accuracy_mod1 <- sum(prob_class_price$class==prob_class_price$predicted.class)/length(prob_class_price[,1])
+```
+
+```{r log-odds}
+mod.coef.logodds <- model_class_price %>%
+                      summary() %>%
+                      coef()
+
+price.logodds.lower <- mod.coef.logodds["price", "Estimate"] - 
+                      1.96 * mod.coef.logodds["price", "Std. Error"]
+
+price.logodds.upper <- mod.coef.logodds["price", "Estimate"] + 
+                      1.96 * mod.coef.logodds["price", "Std. Error"]
+
+plot_model(model_class_price, show.values = TRUE, transform = NULL,
+           title = "Log-Odds (splendid class)", show.p = FALSE, dot.size=0.5)
+
+```
+Hence the point estimate for the log-odds is 0.06, which has a corresponding 95% confidence interval of (0.05, 0.06). 
+```{r odds}
+mod.coef.odds <- model_class_price %>%
+                      coef()%>%
+                      exp()
+
+price.odds.lower <- exp(price.logodds.lower)
+
+price.odds.upper <- exp(price.logodds.upper)
+
+plot_model(model_class_price, show.values = TRUE, axis.lim = c(1,1.5),
+           title = "Odds (splendid class)", show.p = FALSE, dot.size = 0.5)
+
+```
+Hence the point estimate for the odds is 1.06, which has a corresponding 95% confidence interval of (1.05, 1.06). 
+
+We calculate the estimates of the log-odds, odds and probabilities, and we also plot the probability plot of wine points above 90 by prices and the estimated probability plot of wine points above 90 by prices.
+
+```{r mod1probplot, eval = TRUE, out.width='90%', fig.height = 9, fig.width = 15, fig.align = "center", fig.cap = "\\label{fig:mod1prob} Probability Plot of Wine Points Above 90 by Prices", fig.pos = "H"}
+ggplot(data=prob_class_price, aes(x=price, y=probs.perfect)) +
+  geom_smooth(method='glm',
+              method.args=list(family='binomial'),
+              se=FALSE) +
+  labs(x='Price', y='Probability of Wine Points Above 90')
+```
+
+```{r mod1probplot2, eval = TRUE, out.width='90%', fig.height = 9, fig.width = 15, fig.align = "center", fig.cap = "\\label{fig:mod1prob2} Probability Plot 2 of Wine Points Above 90 by Prices", fig.pos = "H"}
+mod1_plot <- plot_model(model_class_price, type='pred', title='Probability Plot 2 of Wine Points Above 90 by Prices',
+           axis.title = c('Price','Probability of Wine Being Perfect'))
+mod1_plot$price
+```
+
+Therefore, price of wine influence the number of points awarded is greater than 90.
+
+### Country
+```{r create_mod3}
+country_table <- country_table %>%
+  arrange(desc(Splendid))
+wine_country <- wine %>%
+  mutate(country_splendid_prop = 0)
+for (i in 1:length(wine_country[,1])){
+  for (j in 1:length(country_table$country)) {
+    if(wine_country$country[i]==country_table$country[j]){
+      wine_country$country_splendid_prop[i] <- country_table$Splendid[j]
+    }
+  }
+}
+wine_country$country <- fct_reorder(wine_country$country,desc(wine_country$country_splendid_prop))
+model_class_country <- glm(as.factor(class)~ country, data=wine_country, family=binomial(link='logit'))
+summ(model_class_country) $coeftable %>%
+  kable(caption = '\\label{tab:mod2coef} The Coefficient Table for Model between Countries and Classes') %>%
+  kable_styling(latex_options = "HOLD_position") 
+prob_class_country <- wine %>%
+  select(class, country) %>%
+  mutate(logodds.perfect = round(predict(model_class_country),6),
+         odds.perfect = round(exp(logodds.perfect),6),
+         probs.perfect = round(fitted(model_class_country),6))
+```
+
+Test code
+```{r}
+wine_spain_aus <- wine %>%
+  filter(country=='Spain' | country=='Australia')
+model_class_two_country <- glm(as.factor(class)~country, data=wine_spain_aus, family=binomial(link='logit'))
+summ(model_class_two_country)
+ggplot(wine_spain_aus, aes(x=country, y=..prop..,group=class,fill=class)) +
+  geom_bar(position='dodge', stat='count') +
+  labs(y='Proportion')
+model_class_two_country %>%
+  summary()
+plot_model(model_class_country, show.values = TRUE, transform=NULL,
+           title='Log-Odds(Australia Country)', show.p=FALSE)
+wine_country_removed <- wine %>%
+  filter(country!=country_table$country[17] & country!=country_table$country[18] &
+          country!=country_table$country[19] & country!=country_table$country[20] & 
+           country!=country_table$country[21] & country!=country_table$country[22] & 
+           country!=country_table$country[23])
+model_class_country_removed <- glm(as.factor(class)~country, data=wine_country_removed, family=binomial(link='logit'))
+plot_model(model_class_country_removed, show.values = TRUE, transform=NULL,
+           title='Log-Odds(Country)', show.p=FALSE)
+summary(model_class_country_removed)
+```
+
+### Province
+
+```{r create_mod4}
+province_table <- province_table %>%
+  arrange(desc(Splendid))
+wine_province <- wine %>%
+  mutate(province_splendid_prop = 0)
+for (i in 1:length(wine_province[,1])){
+  for (j in 1:length(province_table$province)) {
+    if(wine_province$province[i]==province_table$province[j]){
+      wine_province$province_splendid_prop[i] <- province_table$Splendid[j]
+    }
+  }
+}
+wine_province$province <- fct_reorder(wine_province$province,desc(wine_province$province_splendid_prop))
+model_class_province <- glm(as.factor(class)~ province, data=wine_province, family=binomial(link='logit'))
+summ(model_class_province) $coeftable %>%
+  kable(caption = '\\label{tab:mod2coef} The Coefficient Table for Model between Provinces and Classes') %>%
+  kable_styling(latex_options = "HOLD_position") 
+prob_class_province <- wine %>%
+  select(class, province) %>%
+  mutate(logodds.perfect = round(predict(model_class_province),6),
+         odds.perfect = round(exp(logodds.perfect),6),
+         probs.perfect = round(fitted(model_class_province),6))
+```
