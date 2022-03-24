@@ -13,4 +13,6 @@ are only posted for ratings 80 and above)
 - **province** – The province or state the wine is from
 - title – The title of the wine review
 - **variety** – The type of grape
-- **winery** – The winery that made the wine
+- winery – The winery that made the wine
+
+Then in order to study which properties will affect points to be above 90, we added a variable called 'class', which will be 'splendid' if points above 90 and 'normal' if points below 90
