@@ -598,4 +598,4 @@ From the Figure \ref {fig:mod7odds}, for each unit increase in price, the odds o
 
 In conclusion, all of price, variety, winery and province variety are properties of wine influence the number of points awarded is greater than 90.
 
-
+Thanks for everyone's effort to finish this project.
