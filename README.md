@@ -21,3 +21,20 @@ Then in order to study which properties will affect points to be above 90, we ad
 
 
 Thus the task is to research on the relationship between 'class' and 'price', 'country', 'province' and 'variety'.
+
+### Clean Data
+
+When observing the dataset, we found some of values of variables have too few samples to conduct analysis. Thus when did the explanatory and formal analysis, we decided to remove these observations.
+
+### Explanatory Analysis
+
+Create bar chart or summary table for each variable.
+
+### Formal Analysis
+
+Build models between class and other variables to find the properties that affect points above 90.
+
+
+
+
+
