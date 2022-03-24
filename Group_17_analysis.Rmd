@@ -88,6 +88,7 @@ boxplot_price <- ggplot(data = wine, aes(x=class, y=price, fill=class)) +
   geom_boxplot() +
   labs(x='class', y='price') +
   theme(legend.position = 'none')
+boxplot_price
 ```
 
 From the box plot, it can be found that the wines with prices over 200 are definitely 'Splendid'. Thus we decided to remove some outliers with prices over 200. 
@@ -99,6 +100,7 @@ boxplot_price_2 <- ggplot(data = wine_price_low, aes(x=class, y=price, fill=clas
   geom_boxplot() +
   labs(x='class', y='price') +
   theme(legend.position = 'none')
+boxplot_price_2
 ```
 
 As you can see in this boxplot, there is no overlap in the two boxes.
@@ -264,9 +266,9 @@ properties influence the number of points awarded is greater than 90.
 # create one GLM model between wine class and price
 model_class_price <- glm(as.factor(class)~price, data=wine, family = binomial(link = 'logit'))
 summ(model_class_price)$coeftable %>%
-  kable(caption = '\\label{tab:mod1coef} The Coefficient Table for Model between Prices and Classes') %>%
+  kable(caption = '\\label{tab:mod1coef} The Coefficient Table for Model between Prices and Classes', digits=6) %>%
   kable_styling(latex_options = "HOLD_position") 
-mod1coefs <- round(coef(model_class_price),2)
+mod1coefs <- coef(model_class_price)
 ```
 
 The formula of model between class and price
@@ -292,7 +294,7 @@ for (i in 1:length(prob_class_price[,1])) {
 accuracy_mod1 <- sum(prob_class_price$class==prob_class_price$predicted.class)/length(prob_class_price[,1])
 ```
 
-```{r log-odds, eval = TRUE, out.width='90%', fig.height = 9, fig.width = 15, fig.align = "center", fig.cap ="\\label{fig:mod1logodds} Logodds Plot of Wine Points Above 90 by Prices", fig.pos = "H"}
+```{r log-odds, eval = TRUE, out.width='90%', fig.height = 4, fig.width = 4, fig.align = "center", fig.cap ="\\label{fig:mod1logodds} Logodds Plot of Wine Points Above 90 by Prices", fig.pos = "H"}
 mod.coef.logodds <- model_class_price %>%
                       summary() %>%
                       coef()
@@ -303,12 +305,12 @@ price.logodds.lower <- mod.coef.logodds["price", "Estimate"] -
 price.logodds.upper <- mod.coef.logodds["price", "Estimate"] + 
                       1.96 * mod.coef.logodds["price", "Std. Error"]
 
-plot_model(model_class_price, show.values = TRUE, transform = NULL,
+plot_model(model_class_price, show.values = TRUE, transform = NULL, axis.lim=c(0, 0.5),
            title = "Log-Odds (splendid class)", show.p = FALSE, dot.size=0.5)
 
 ```
 
-```{r odds, eval = TRUE, out.width='90%', fig.height = 9, fig.width = 15, fig.align = "center", fig.cap = "\\label{fig:mod1odds} Odds Plot of Wine Points Above 90 by Prices", fig.pos = "H"}
+```{r odds, eval = TRUE, out.width='90%', fig.height = 4, fig.width = 4, fig.align = "center", fig.cap = "\\label{fig:mod1odds} Odds Plot of Wine Points Above 90 by Prices", fig.pos = "H"}
 mod.coef.odds <- model_class_price %>%
                       coef()%>%
                       exp()
@@ -340,7 +342,7 @@ mod1_plot$price
 ```{r create_mod2}
 model_class_country <- glm(as.factor(class) ~ country, data=wine_country, family=binomial(link='logit'))
 summ(model_class_country) $coeftable %>%
-  kable(caption = '\\label{tab:mod2coef} The Coefficient Table for Model between Countries and Classes') %>%
+  kable(caption = '\\label{tab:mod2coef} The Coefficient Table for Model between Country and Class') %>%
   kable_styling(latex_options = "HOLD_position") 
 coefs_country <- summary(model_class_country)$coefficients
 vars_country <- rownames(coefs_country)[which(coefs_country[,4] < 0.05)]
@@ -348,6 +350,9 @@ wine_country <- wine_country %>%
   filter(country=='Argentina'| country=='Australia'| country=='Austria'| country=='France'| 
            country=='Germany'| country=='Italy'| country=='US')
 model_class_country_2 <- glm(as.factor(class) ~ country, data=wine_country, family=binomial(link='logit'))
+summ(model_class_country_2) $coeftable %>%
+  kable(caption = '\\label{tab:mod2coef2} The Coefficient Table for Model between Selected Country and Class') %>%
+  kable_styling(latex_options = "HOLD_position") 
 prob_class_country <- wine_country %>%
   select(class, country) %>%
   mutate(logodds.perfect = round(predict(model_class_country_2),6),
@@ -376,7 +381,7 @@ mod2_plot$country
 model_class_variety <- glm(as.factor(class) ~ variety, data=wine_variety, family=binomial(link='logit'))
 
 summ(model_class_variety) $coeftable %>%
-  kable(caption = '\\label{tab:mod2coef} The Coefficient Table for Model between Countries and Classes') %>%
+  kable(caption = '\\label{tab:mod2coef} The Coefficient Table for Model between Variety and Class') %>%
   kable_styling(latex_options = "HOLD_position") 
 coefs_variety <- summary(model_class_variety)$coefficients
 vars_variety <- rownames(coefs_variety)[which(coefs_variety[,4] < 0.05)]
@@ -384,8 +389,11 @@ wine_variety <- wine_variety %>%
   filter(variety=='Bordeaux-style Red Blend'| variety=='Chardonnay'| variety=='Merlot'| 
            variety=='Ros<e9>'|variety=='Sangiovese'| variety=='Sauvignon Blanc'| 
            variety=='Tempranillo'| variety=='White Blend')
-model_class_variety_2 <- glm(as.factor(class) ~ variety, data=wine_variety, family=binomial(link='logit'))
 
+model_class_variety_2 <- glm(as.factor(class) ~ variety, data=wine_variety, family=binomial(link='logit'))
+summ(model_class_variety_2) $coeftable %>%
+  kable(caption = '\\label{tab:mod2coef2} The Coefficient Table for Model between Selected Variety and Class') %>%
+  kable_styling(latex_options = "HOLD_position") 
 prob_class_variety <- wine_variety %>%
   select(class, variety) %>%
   mutate(logodds.perfect = round(predict(model_class_variety_2),6),
@@ -414,7 +422,7 @@ mod3_plot$variety
 model_class_province <- glm(as.factor(class) ~ province, data=wine_province, family=binomial(link='logit'))
 
 summ(model_class_province) $coeftable %>%
-  kable(caption = '\\label{tab:mod2coef} The Coefficient Table for Model between Countries and Classes') %>%
+  kable(caption = '\\label{tab:mod2coef} The Coefficient Table for Model between Province and Class') %>%
   kable_styling(latex_options = "HOLD_position") 
 coefs_province <- summary(model_class_province)$coefficients
 vars_province <- rownames(coefs_province)[which(coefs_province[,4] < 0.05)]
@@ -422,7 +430,9 @@ wine_province <- wine_province %>%
   filter(province=='Mendoza Province'| province=='New York'| 
          province=='Northeastern Italy'|province=='Northern Spain')
 model_class_province_2 <- glm(as.factor(class) ~ province, data=wine_province, family=binomial(link='logit'))
-
+summ(model_class_province_2) $coeftable %>%
+  kable(caption = '\\label{tab:mod2coef2} The Coefficient Table for Model between Selected Province and Class') %>%
+  kable_styling(latex_options = "HOLD_position") 
 prob_class_province <- wine_province %>%
   select(class, province) %>%
   mutate(logodds.perfect = round(predict(model_class_province_2),6),
@@ -445,28 +455,6 @@ mod4_plot <- plot_model(model_class_province_2, type='pred', title='Probability 
                         Above 90 by Province', 
                         axis.title = c('Province','Probability of Wine Being Perfect'))
 mod4_plot$province
-```
-
-```{r}
-# wine_data <- wine %>%
-#   inner_join(country_count, by='country') %>%
-#   select(!percent) %>%
-#   inner_join(variety_count, by='variety') %>%
-#   select(!percent) %>%
-#   inner_join(province_count, by='province') %>%
-#   select(!percent)
-# colnames(wine_data)[10] <- 'country_count'
-# colnames(wine_data)[11] <- 'variety_count'
-# colnames(wine_data)[12] <- 'province_count'
-# wine_data <- wine_data %>%
-#   filter(country=='Argentina'| country=='Australia'| country=='Austria'| country=='France'| 
-#            country=='Germany'| country=='Italy'| country=='US') %>%
-#   filter(variety=='Bordeaux-style Red Blend'| variety=='Chardonnay'| variety=='Merlot'| 
-#            variety=='Ros<e9>'|variety=='Sangiovese'| variety=='Sauvignon Blanc'| 
-#            variety=='Tempranillo'| variety=='White Blend') 
-# model_class_country_variety <- glm(as.factor(class) ~ country + variety + price, data=wine_data, family=binomial(link = 'logit'))
-# summary(model_class_country_variety)
-
 ```
 
 
