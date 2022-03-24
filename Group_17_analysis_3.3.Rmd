@@ -1,0 +1,524 @@
+---
+title: "Group_17_Analysis"
+author: "Weirong Bai"
+date: "13/03/2022"
+output: 
+  pdf_document:
+    latex_engine: pdflatex
+    number_sections: no
+  html_document:
+    df_print: paged
+fig_caption: yes
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, eval = TRUE, warning = FALSE, message = FALSE, comment = NA)
+```
+
+``` {r libraries}
+library(tidyverse)
+library(dplyr)
+library(ggplot2)
+library(broom)
+library(robotstxt)
+library(rvest)
+library(stringr)
+library(moderndive)
+library(gridExtra)
+library(kableExtra)
+library(skimr)
+library(gapminder)
+library(sjPlot)
+library(stats)
+library(jtools)
+library(janitor)
+```
+
+``` {r read data, echo=FALSE, eval=TRUE}
+#wine <- read.csv('/Users/admin/Documents/Term 2 Courses/Data Analysis Skills/Group Project 2/dataset17.csv')
+# setwd("/Users/q/Library/Containers/com.tencent.xinWeChat/Data/Library/Application Support/com.tencent.xinWeChat/2.0b4.0.9/26da2bf949bc61ecd8c854d97b76da04/Message/MessageTemp/234be380d4776d30f43bbb535b558b94/File/Group_17_Analysis_1")
+wine <- read.csv('/Users/admin/Documents/Term 2 Courses/Data Analysis Skills/Group Project 2/dataset17.csv')
+
+```
+
+```{r preparations}
+# remove one row with too few information 
+# We think it has no value for this research, because this data does not have 'country' 'price' 'province'. 
+wine <- wine %>%
+  filter(!is.na(country))
+# In terms of price, we change the NA to the median of the price with the same points.
+for(i in 1:length(wine$price)){
+  if(is.na(wine$price[i])) {
+    wine_i <- wine %>% filter(points==points[i])
+    wine$price[i] <- median(wine_i$price, na.rm=TRUE)
+  }
+}
+# add one column called 'class'
+# Meaning: when points>90, the class of wine would be splendid; otherwise normal
+wine <- wine %>%
+  mutate(class=as.character(points>90))
+for (i in 1:length(wine[,1])) {
+  if (wine$class[i]==TRUE) {
+    wine$class[i] <- 'Splendid'
+  }
+  else {
+    wine$class[i] <- 'Normal'
+  }
+}
+
+```
+
+# Research Question 
+
+The purpose of this research is to examine which properties of wine influence whether the number of points awarded is greater than 90?
+
+## 1 Introduction {#sec:Intro_1}
+
+Our data contains ratings on a variety of wines and several characteristics about them, which are country, price, province, title, variety, winery. From the data, the titles of different wines vary, which is not very significant for this study, so we study the effects of the remaining variables on the ratings.
+
+## 2 Exploratory Data Analysis
+In the data pre-processing process, we add one column named 'class'. When points>90, the class of wine would be splendid; otherwise normal. We shall consider class of points as our response variable, and hence shall have a binary response variable (splendid/normal).
+
+First, let's look at a boxplot of price by class.
+```{r class_price_boxplot, eval = TRUE, out.width='100%', fig.height = 3, fig.width = 3, fig.align = "center", fig.cap = "\\label{fig:boxplot} Box Plot of Prices for Wine Classes", fig.pos = "H"}
+# boxplot of price for two wine classes
+boxplot_price <- ggplot(data = wine, aes(x=class, y=price, fill=class)) +
+  geom_boxplot() +
+  labs(x='class', y='price') +
+  theme(legend.position = 'none')
+boxplot_price
+```
+
+From the box plot, it can be found that the wines with prices over 200 are definitely 'Splendid'. Thus we decided to remove some outliers with prices over 200. 
+
+```{r class_price_boxplot2, eval = TRUE, out.width='100%', fig.height = 4, fig.width = 4, fig.align = "center", fig.cap = "\\label{fig:boxplot2} Box Plot of Prices for Wine Classes After Removing Prices over 200", fig.pos = "H"}
+wine_price_low <- wine %>%
+  filter(price <= 200)
+boxplot_price_2 <- ggplot(data = wine_price_low, aes(x=class, y=price, fill=class)) +
+  geom_boxplot() +
+  labs(x='class', y='price') +
+  theme(legend.position = 'none')
+boxplot_price_2
+```
+
+As you can see in this boxplot, there is no overlap in the two boxes.
+
+Then we decided to study the relationship between the class and the country. So first of all, we will make a table to show whether there is a difference among countries.
+
+```{r country_differences_table}
+country_table <- wine %>%
+  tabyl(country, class) %>%
+  adorn_percentages() %>%
+  adorn_pct_formatting() %>%
+  adorn_ns() 
+country_count <- wine %>%
+  tabyl(country) %>%
+  adorn_totals()
+country_table %>%
+  kable(caption='\\label{tab:country_differences} The differences of points among different countries') %>%
+  kable_styling(latex_options='HOLD_position')
+```
+
+Then we draw a bar plot to show the differences of different classes in every countries
+```{r class_country_barchart, eval = TRUE, out.width='100%', fig.height = 7, fig.width = 15, fig.align = "center", fig.cap = "\\label{fig:barchart_1} Bar Plot of Country for Wine Classes", fig.pos = "H"}
+wine_country <- wine %>%
+  inner_join(country_count, by='country') %>%
+  select(!percent)
+colnames(wine_country)[10] <- 'country_count'
+
+wine_country <- wine_country %>% 
+  filter(country_count >= 10)
+
+barchart_country <- wine_country %>%
+  filter(country!='US' & country!='France' & country!='Italy') %>%
+  ggplot(aes(x=country, y=..count.., fill=class, group=class))+
+  geom_bar() + 
+  geom_text(stat = 'count', aes(label=..count..), position = position_stack(0.9), check_overlap = TRUE) +
+  labs(x = 'Country', y = 'Number of wines', title = 'Proportions of wines with over 90 points by country') +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+  scale_fill_discrete(name = 'Class')
+```
+
+```{r variety_differences_table}
+wine$variety <- as.factor(wine$variety)
+
+variety_table <- wine %>%
+  tabyl(variety, class) %>%
+  adorn_percentages() %>%
+  adorn_pct_formatting() %>%
+  adorn_ns(position='front') %>%
+  arrange(desc(Splendid))
+
+variety_count <- wine %>%
+  tabyl(variety) %>%
+  adorn_totals()
+
+variety_table[1:15,] %>%
+  kable(caption='\\label{tab:variety_differences} The differences of points among different variety') %>%
+  kable_styling(latex_options='HOLD_position')
+
+wine_variety <- wine %>%
+  inner_join(variety_count, by='variety') %>%
+  select(!percent)
+colnames(wine_variety)[10] <- 'variety_count'
+```
+
+```{r class_variety_barchart, eval = TRUE, out.width='100%', fig.height = 9, fig.width = 15, fig.align = "center", fig.cap = "\\label{fig:barchart_2} Bar Plot of Top 15 Varieties for Wine Classes", fig.pos = "H"}
+# choose the most 15 'Variety' to visualize the plot 
+wine_variety <- wine_variety %>%
+  filter(variety_count >= 20)
+  # filter(variety==variety_summary$variety[1] | variety==variety_summary$variety[2] |
+  #          variety==variety_summary$variety[3] | variety==variety_summary$variety[4] |
+  #          variety==variety_summary$variety[5] | variety==variety_summary$variety[6] |
+  #          variety==variety_summary$variety[7] | variety==variety_summary$variety[8] |
+  #          variety==variety_summary$variety[9] | variety==variety_summary$variety[10] |
+  #          variety==variety_summary$variety[11] | variety==variety_summary$variety[12] |
+  #          variety==variety_summary$variety[13] | variety==variety_summary$variety[14] |
+  #          variety==variety_summary$variety[15])
+# use a for loop to change one character which cannot display correctly
+for(i in 1:length(wine_variety[,1])){
+  if(wine_variety$variety[i]=='Rh\xf4ne-style Red Blend'){
+    wine_variety$variety[i] <- 'Rh<f4>ne-style Red Blend'
+  }
+  else if(wine_variety$variety[i]=='Ros\xe9'){
+    wine_variety$variety[i] <- 'Ros<e9>'
+  }
+  else if(wine_variety$variety[i]=='Gr\xfcner Veltliner'){
+    wine_variety$variety[i] <- 'Gr<fc>ner Veltliner'
+  }
+}
+# create the bar chart
+barchart_variety <- wine_variety %>%
+  filter(variety!='Pinot Noir'& variety!='Chardonnay'& 
+         variety!='Cabernet Sauvignon'& variety!='Red Blend') %>%
+  ggplot(aes(x=variety, y=..count.., fill=class, group=class))+
+  geom_bar() + 
+  geom_text(stat = 'count', aes(label=..count..), position = position_stack(0.9), check_overlap = TRUE) +
+  labs(x = 'Variety', y = 'Number of wines', title = 'Proportions of wines with over 90 points by variety') +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+  scale_fill_discrete(name = 'Class')
+```
+
+```{r province_differences_table}
+wine$province <- as.factor(wine$province)
+province_table <- wine %>%
+  tabyl(province, class) %>%
+  adorn_percentages() %>%
+  adorn_pct_formatting() %>%
+  adorn_ns(position='front') %>%
+  arrange(desc(Splendid))
+
+province_count <- wine %>%
+  tabyl(province) %>%
+  adorn_totals()
+
+province_table[1:15,] %>%
+  kable(caption='\\label{tab:province_differences} The differences of points among different provinces') %>%
+  kable_styling(latex_options='HOLD_position')
+
+wine_province <- wine %>%
+  inner_join(province_count, by='province') %>%
+  select(!percent)
+colnames(wine_province)[10] <- 'province_count'
+```
+
+```{r class_province_barchart, eval = TRUE, out.width='100%', fig.height = 9, fig.width = 15, fig.align = "center", fig.cap = "\\label{fig:barchart_3} Bar Plot of Top 15 Varieties for Wine Classes", fig.pos = "H"}
+wine_province <- wine_province %>%
+  filter(province_count >= 20)
+for(i in 1:length(wine_province[,1])){
+  if(wine_province$province[i]=='Nieder\xf6sterreich'){
+    wine_province$province[i] <- 'Nieder<f6>sterreich'
+  }
+  else if(wine_province$province[i]=='Rh\xf4ne Valley'){
+    wine_province$province[i] <- 'Rh<f4>ne Valley'
+  }
+}
+barchart_province <- wine_province %>%
+  filter(province!='California') %>%
+  ggplot(aes(x=province, y=..count.., fill=class, group=class))+
+  geom_bar() + 
+  geom_text(stat = 'count', aes(label=..count..), position = position_stack(0.9), check_overlap = TRUE) +
+  labs(x='province', y='Number of wines', title='Proportions of wines with over 90 points by province') +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+  scale_fill_discrete(name = 'Class')
+```
+
+## 3 Formal Data Analysis {#sec:FDA_1}
+
+First of all, we examine the relationship between wine price and points. In the data pre-processing process, we add one column named 'class'. When points>90, the class of wine would be splendid; otherwise normal. We shall consider class of points as our response variable, and hence shall have a binary response variable (splendid/normal).
+
+Now, let's look at a boxplot of price by class.
+
+```{r class_price_boxplot_2, eval = TRUE, out.width='100%', fig.height = 3, fig.width = 15, fig.align = "center", fig.cap = "\\label{fig:mod1boxplot} Box Plot of Prices for Wine Classes", fig.pos = "H"}
+# boxplot of price for two wine classes
+ggplot(data = wine, aes(x=class, y=price, fill=class)) +
+  geom_boxplot() +
+  labs(x='class', y='price') +
+  theme(legend.position = 'none')
+```
+
+Here we can see that the price of splendid tend to be higher than that of normal. Now, let's fit a logistic regression model to see whether price is a significant
+properties influence the number of points awarded is greater than 90.
+
+```{r create_mod1}
+# create one GLM model between wine class and price
+model_class_price <- glm(as.factor(class)~price, data=wine, family = binomial(link = 'logit'))
+summ(model_class_price)$coeftable %>%
+  kable(caption = '\\label{tab:mod1coef} The Coefficient Table for Model between Prices and Classes', digits=6) %>%
+  kable_styling(latex_options = "HOLD_position") 
+mod1coefs <- coef(model_class_price)
+```
+
+The formula of model between class and price
+$$\ln\left(\frac{p}{1-p}\right)= \alpha+\beta \cdot \textrm{price} = `r mod1coefs[1]` + `r mod1coefs[2]`\cdot\textrm{price}$$
+In the formula, where p=Prob(splendid) and 1-p=Prob(normal). Hence, the log-odds of the wine being splendid increase by xxx for every one unit increase in price.
+
+```{r mod1data}
+prob_class_price <- wine %>%
+  select(class, price) %>%
+  mutate(logodds.perfect = round(predict(model_class_price),6),
+         odds.perfect = round(exp(logodds.perfect), 3),
+         probs.perfect = round(fitted(model_class_price),6),
+         predicted.class = (probs.perfect>=0.5))
+for (i in 1:length(prob_class_price[,1])) {
+  if (prob_class_price$predicted.class[i]==TRUE) {
+    prob_class_price$predicted.class[i] <- 'Splendid'
+  }
+  else {
+    prob_class_price$predicted.class[i] <- 'Normal'
+  }
+}
+# Accuracy of prediction by GLM
+accuracy_mod1 <- sum(prob_class_price$class==prob_class_price$predicted.class)/length(prob_class_price[,1])
+```
+
+```{r log-odds, eval = TRUE, out.width='90%', fig.height = 4, fig.width = 4, fig.align = "center", fig.cap ="\\label{fig:mod1logodds} Logodds Plot of Wine Points Above 90 by Prices", fig.pos = "H"}
+mod.coef.logodds <- model_class_price %>%
+                      summary() %>%
+                      coef()
+
+price.logodds.lower <- mod.coef.logodds["price", "Estimate"] - 
+                      1.96 * mod.coef.logodds["price", "Std. Error"]
+
+price.logodds.upper <- mod.coef.logodds["price", "Estimate"] + 
+                      1.96 * mod.coef.logodds["price", "Std. Error"]
+
+plot_model(model_class_price, show.values = TRUE, transform = NULL, axis.lim=c(0, 0.5),
+           title = "Log-Odds (splendid class)", show.p = FALSE, dot.size=0.5)
+
+```
+
+```{r odds, eval = TRUE, out.width='90%', fig.height = 4, fig.width = 4, fig.align = "center", fig.cap = "\\label{fig:mod1odds} Odds Plot of Wine Points Above 90 by Prices", fig.pos = "H"}
+mod.coef.odds <- model_class_price %>%
+                      coef()%>%
+                      exp()
+
+price.odds.lower <- exp(price.logodds.lower)
+
+price.odds.upper <- exp(price.logodds.upper)
+
+plot_model(model_class_price, show.values = TRUE, axis.lim = c(1,1.5),
+           title = "Odds (splendid class)", show.p = FALSE, dot.size = 0.5)
+```
+We calculate the estimates of the log-odds, odds and probabilities, and we also plot the probability plot of wine points above 90 by prices and the estimated probability plot of wine points above 90 by prices.
+
+```{r mod1probplot, eval = TRUE, out.width='90%', fig.height = 9, fig.width = 15, fig.align = "center", fig.cap = "\\label{fig:mod1prob} Probability Plot of Wine Points Above 90 by Prices", fig.pos = "H"}
+ggplot(data=prob_class_price, aes(x=price, y=probs.perfect)) +
+  geom_smooth(method='glm',
+              method.args=list(family='binomial'),
+              se=FALSE) +
+  labs(x='Price', y='Probability of Wine Points Above 90')
+```
+
+```{r mod1probplot2, eval = TRUE, out.width='90%', fig.height = 9, fig.width = 15, fig.align = "center", fig.cap = "\\label{fig:mod1prob2} Probability Plot 2 of Wine Points Above 90 by Prices", fig.pos = "H"}
+mod1_plot <- plot_model(model_class_price, type='pred', title='Probability Plot 2 of Wine Points Above 90 by
+                        Prices',axis.title = c('Price','Probability of Wine Being Perfect'))
+mod1_plot$price
+```
+
+### Country
+```{r create_mod2}
+model_class_country <- glm(as.factor(class) ~ country, data=wine_country, family=binomial(link='logit'))
+summ(model_class_country) $coeftable %>%
+  kable(caption = '\\label{tab:mod2coef} The Coefficient Table for Model between Country and Class') %>%
+  kable_styling(latex_options = "HOLD_position") 
+coefs_country <- summary(model_class_country)$coefficients
+vars_country <- rownames(coefs_country)[which(coefs_country[,4] < 0.05)]
+wine_country <- wine_country %>%
+  filter(country=='Argentina'| country=='Australia'| country=='Austria'| country=='France'| 
+           country=='Germany'| country=='Italy'| country=='US')
+model_class_country_2 <- glm(as.factor(class) ~ country, data=wine_country, family=binomial(link='logit'))
+summ(model_class_country_2) $coeftable %>%
+  kable(caption = '\\label{tab:mod2coef2} The Coefficient Table for Model between Selected Country and Class') %>%
+  kable_styling(latex_options = "HOLD_position") 
+prob_class_country <- wine_country %>%
+  select(class, country) %>%
+  mutate(logodds.perfect = round(predict(model_class_country_2),6),
+         odds.perfect = round(exp(logodds.perfect),6),
+         probs.perfect = round(fitted(model_class_country_2),6))
+```
+
+```{r logodds_country, eval = TRUE, out.width='90%', fig.height = 9, fig.width = 15, fig.align = "center", fig.cap = "\\label{fig:mod2logodds} Logodds Plot of Wine Points Above 90 by Country", fig.pos = "H"}
+plot_model(model_class_country_2, show.values = TRUE, transform = NULL,
+           title = "Log-Odds (splendid class)", show.p = FALSE, dot.size=0.5)
+```
+
+```{r odds_country, eval = TRUE, out.width='90%', fig.height = 9, fig.width = 15, fig.align = "center", fig.cap = "\\label{fig:mod2odds} Odds Plot of Wine Points Above 90 by Country", fig.pos = "H"}
+plot_model(model_class_country_2, show.values = TRUE, axis.lim = c(1, 15),
+           title = "Odds (splendid class)", show.p = FALSE, dot.size = 0.5)
+```
+
+```{r mod2probplot, eval = TRUE, out.width='90%', fig.height = 9, fig.width = 15, fig.align = "center", fig.cap = "\\label{fig:mod2prob} Probability Plot of Wine Points Above 90 by Country", fig.pos = "H"}
+mod2_plot <- plot_model(model_class_country_2, type='pred', title='Probability Plot 2 of Wine Points 
+                        Above 90 by Country',axis.title = c('Country','Probability of Wine Being Perfect'))
+mod2_plot$country
+```
+
+### Variety
+```{r}
+model_class_variety <- glm(as.factor(class) ~ variety, data=wine_variety, family=binomial(link='logit'))
+
+summ(model_class_variety) $coeftable %>%
+  kable(caption = '\\label{tab:mod2coef} The Coefficient Table for Model between Variety and Class') %>%
+  kable_styling(latex_options = "HOLD_position") 
+coefs_variety <- summary(model_class_variety)$coefficients
+vars_variety <- rownames(coefs_variety)[which(coefs_variety[,4] < 0.05)]
+wine_variety <- wine_variety %>%
+  filter(variety=='Bordeaux-style Red Blend'| variety=='Chardonnay'| variety=='Merlot'| 
+           variety=='Ros<e9>'|variety=='Sangiovese'| variety=='Sauvignon Blanc'| 
+           variety=='Tempranillo'| variety=='White Blend')
+
+model_class_variety_2 <- glm(as.factor(class) ~ variety, data=wine_variety, family=binomial(link='logit'))
+summ(model_class_variety_2) $coeftable %>%
+  kable(caption = '\\label{tab:mod2coef2} The Coefficient Table for Model between Selected Variety and Class') %>%
+  kable_styling(latex_options = "HOLD_position") 
+prob_class_variety <- wine_variety %>%
+  select(class, variety) %>%
+  mutate(logodds.perfect = round(predict(model_class_variety_2),6),
+         odds.perfect = round(exp(logodds.perfect),6),
+         probs.perfect = round(fitted(model_class_variety_2),6))
+```
+
+```{r logodds_variety, eval = TRUE, out.width='90%', fig.height = 9, fig.width = 15, fig.align = "center", fig.cap = "\\label{fig:mod3logodds} Logodds Plot of Wine Points Above 90 by Variety", fig.pos = "H"}
+plot_model(model_class_variety_2, show.values = TRUE, transform = NULL,
+           title = "Log-Odds (splendid class)", show.p = FALSE, dot.size=0.5)
+```
+
+```{r odds_variety, eval = TRUE, out.width='90%', fig.height = 9, fig.width = 15, fig.align = "center", fig.cap = "\\label{fig:mod3odds} Odds Plot of Wine Points Above 90 by Variety", fig.pos = "H"}
+plot_model(model_class_variety_2, show.values = TRUE, axis.lim = c(0.03, 1),
+           title = "Odds (splendid class)", show.p = FALSE, dot.size = 0.5)
+```
+
+```{r mod3probplot, eval = TRUE, out.width='90%', fig.height = 9, fig.width = 15, fig.align = "center", fig.cap = "\\label{fig:mod3prob} Probability Plot of Wine Points Above 90 by Variety", fig.pos = "H"}
+mod3_plot <- plot_model(model_class_variety_2, type='pred', title='Probability Plot 2 of Wine Points 
+                        Above 90 by Variety',axis.title = c('Variety','Probability of Wine Being Perfect'))
+mod3_plot$variety
+```
+
+### Province
+```{r}
+model_class_province <- glm(as.factor(class) ~ province, data=wine_province, family=binomial(link='logit'))
+
+summ(model_class_province) $coeftable %>%
+  kable(caption = '\\label{tab:mod2coef} The Coefficient Table for Model between Province and Class') %>%
+  kable_styling(latex_options = "HOLD_position") 
+coefs_province <- summary(model_class_province)$coefficients
+vars_province <- rownames(coefs_province)[which(coefs_province[,4] < 0.05)]
+wine_province <- wine_province %>%
+  filter(province=='Mendoza Province'| province=='New York'| 
+         province=='Northeastern Italy'|province=='Northern Spain')
+model_class_province_2 <- glm(as.factor(class) ~ province, data=wine_province, family=binomial(link='logit'))
+summ(model_class_province_2) $coeftable %>%
+  kable(caption = '\\label{tab:mod2coef2} The Coefficient Table for Model between Selected Province and Class') %>%
+  kable_styling(latex_options = "HOLD_position") 
+prob_class_province <- wine_province %>%
+  select(class, province) %>%
+  mutate(logodds.perfect = round(predict(model_class_province_2),6),
+         odds.perfect = round(exp(logodds.perfect),6),
+         probs.perfect = round(fitted(model_class_province_2),6))
+```
+
+```{r logodds_province, eval = TRUE, out.width='90%', fig.height = 9, fig.width = 15, fig.align = "center", fig.cap = "\\label{fig:mod4logodds} Logodds Plot of Wine Points Above 90 by Province", fig.pos = "H"}
+plot_model(model_class_province_2, show.values = TRUE, transform = NULL,
+           title = "Log-Odds (splendid class)", show.p = FALSE, dot.size=0.5)
+```
+
+```{r odds_province, eval = TRUE, out.width='90%', fig.height = 9, fig.width = 15, fig.align = "center", fig.cap = "\\label{fig:mod4odds} Odds Plot of Wine Points Above 90 by Province", fig.pos = "H"}
+plot_model(model_class_province_2, show.values = TRUE, axis.lim = c(0.075, 5),
+           title = "Odds (splendid class)", show.p = FALSE, dot.size = 0.5)
+```
+
+```{r mod4probplot, eval = TRUE, out.width='90%', fig.height = 9, fig.width = 15, fig.align = "center", fig.cap = "\\label{fig:mod4prob} Probability Plot of Wine Points Above 90 by Province", fig.pos = "H"}
+mod4_plot <- plot_model(model_class_province_2, type='pred', title='Probability Plot of Wine Points 
+                        Above 90 by Province', 
+                        axis.title = c('Province','Probability of Wine Being Perfect'))
+mod4_plot$province
+```
+
+```{r}
+wine_data <- wine %>%
+  inner_join(country_count, by='country') %>%
+  select(!percent) %>%
+  inner_join(variety_count, by='variety') %>%
+  select(!percent) %>%
+  inner_join(province_count, by='province') %>%
+  select(!percent)
+colnames(wine_data)[10] <- 'country_count'
+colnames(wine_data)[11] <- 'variety_count'
+colnames(wine_data)[12] <- 'province_count'
+wine_data <- wine_data %>%
+  filter(country_count>=20 & province_count>=20 & variety_count>=20)
+```
+
+
+```{r}
+model_class_price_country <- glm(as.factor(class)~price+country, data=wine_data, family=binomial(link='logit'))
+wine_price_country <- wine_data %>%
+  filter(country=='Argentina'|country=='Australia')
+
+model_class_price_country_2 <- glm(as.factor(class)~price+country, data=wine_price_country, family=binomial(link='logit'))
+
+summary(model_class_price_country_2)
+```
+
+```{r}
+model_class_price_province <- glm(as.factor(class)~price+province, data=wine_data, family=binomial(link='logit'))
+summary(model_class_price_province)
+```
+
+```{r}
+model_class_price_variety <- glm(as.factor(class)~price+variety, data=wine_data, family=binomial(link='logit'))
+summary(model_class_price_variety)
+```
+
+```{r}
+model_class_price_country_variety <- glm(as.factor(class)~country+variety+price, data=wine, family=binomial(link='logit'))
+summary(model_class_price_country_variety)
+```
+
+```{r}
+
+# wine_data <- wine_data %>%
+#   filter(country=='Argentina'| country=='Australia'| country=='Austria'| country=='France'|
+#            country=='Germany'| country=='Italy'| country=='US') %>%
+#   filter(variety=='Bordeaux-style Red Blend'| variety=='Chardonnay'| variety=='Merlot'|
+#            variety=='Ros<e9>'|variety=='Sangiovese'| variety=='Sauvignon Blanc'|
+#            variety=='Tempranillo'| variety=='White Blend') %>%
+#   filter(province=='Mendoza Province' | province=='New York'| 
+#          province=='Northeastern Italy'|province=='Northern Spain')
+model_class_country_variety <- glm(as.factor(class) ~ country + variety + province + price, data=wine_data, family=binomial(link = 'logit'))
+summary(model_class_country_variety)
+summary(model_class_country_2)
+summary(model_class_province_2)
+summary(model_class_variety_2)
+summary(model_class_price)
+
+```
+
+
+
+
+
+
